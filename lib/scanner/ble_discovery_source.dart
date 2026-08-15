@@ -5,6 +5,8 @@ import 'package:bluetooth_low_energy/bluetooth_low_energy.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
 
+import '../bthome/bthome_models.dart';
+
 enum BleAdapterStatus {
   unknown,
   unsupported,
@@ -17,6 +19,7 @@ class BleDiscoveredAdvertisement {
   const BleDiscoveredAdvertisement({
     required this.deviceId,
     required this.rssi,
+    required this.serviceUuid,
     required this.serviceData,
     this.name,
   });
@@ -24,6 +27,7 @@ class BleDiscoveredAdvertisement {
   final String deviceId;
   final String? name;
   final int rssi;
+  final int serviceUuid;
   final Uint8List serviceData;
 }
 
@@ -79,27 +83,38 @@ class SystemBleDiscoverySource implements BleDiscoverySource {
 
   void _onDiscovered(DiscoveredEventArgs event) {
     Uint8List? bthomeData;
+    int? bthomeServiceUuid;
     for (final entry in event.advertisement.serviceData.entries) {
-      if (_isBthomeUuid(entry.key)) {
+      final serviceUuid = _bthomeServiceUuid(entry.key);
+      if (serviceUuid != null) {
         bthomeData = Uint8List.fromList(entry.value);
+        bthomeServiceUuid = serviceUuid;
         break;
       }
     }
-    if (bthomeData == null) return;
+    if (bthomeData == null || bthomeServiceUuid == null) return;
 
     _discoveryController.add(
       BleDiscoveredAdvertisement(
         deviceId: event.peripheral.uuid.toString(),
         name: event.advertisement.name,
         rssi: event.rssi,
+        serviceUuid: bthomeServiceUuid,
         serviceData: bthomeData,
       ),
     );
   }
 
-  bool _isBthomeUuid(UUID uuid) {
+  int? _bthomeServiceUuid(UUID uuid) {
     final compact = uuid.toString().toLowerCase().replaceAll('-', '');
-    return compact == 'fcd2' || compact == '0000fcd200001000800000805f9b34fb';
+    return switch (compact) {
+      '181c' ||
+      '0000181c00001000800000805f9b34fb' => BthomeServiceUuid.v1Unencrypted,
+      '181e' ||
+      '0000181e00001000800000805f9b34fb' => BthomeServiceUuid.v1Encrypted,
+      'fcd2' || '0000fcd200001000800000805f9b34fb' => BthomeServiceUuid.v2,
+      _ => null,
+    };
   }
 
   @override

@@ -2,6 +2,15 @@ import 'dart:typed_data';
 
 enum BthomeValueKind { number, binary, event, text, raw, timestamp, version }
 
+abstract final class BthomeServiceUuid {
+  static const int v1Unencrypted = 0x181c;
+  static const int v1Encrypted = 0x181e;
+  static const int v2 = 0xfcd2;
+
+  static bool isSupported(int value) =>
+      value == v1Unencrypted || value == v1Encrypted || value == v2;
+}
+
 class BthomeDeviceInfo {
   const BthomeDeviceInfo({
     required this.raw,
@@ -47,6 +56,7 @@ class BthomeMeasurement {
 
 class BthomePacket {
   const BthomePacket({
+    required this.serviceUuid,
     required this.deviceInfo,
     required this.measurements,
     required this.raw,
@@ -54,11 +64,15 @@ class BthomePacket {
     this.remaining = const <int>[],
   });
 
+  final int serviceUuid;
   final BthomeDeviceInfo deviceInfo;
   final List<BthomeMeasurement> measurements;
   final Uint8List raw;
   final String? issue;
   final List<int> remaining;
+
+  String get serviceUuidHex =>
+      '0x${serviceUuid.toRadixString(16).padLeft(4, '0').toUpperCase()}';
 
   bool get hasActiveAlarm => measurements.any(
     (measurement) =>

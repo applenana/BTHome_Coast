@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:bthome_coast/audio/ambient_audio_controller.dart';
+import 'package:bthome_coast/bthome/bthome_models.dart';
 import 'package:bthome_coast/scanner/ble_discovery_source.dart';
 
 class FakeBleDiscoverySource implements BleDiscoverySource {
@@ -51,6 +52,7 @@ class FakeBleDiscoverySource implements BleDiscoverySource {
     String id = 'AA:BB:CC:DD:EE:FF',
     String name = 'CH572 Alarm',
     int rssi = -52,
+    int serviceUuid = BthomeServiceUuid.v2,
     required List<int> data,
   }) {
     _discoveries.add(
@@ -58,6 +60,7 @@ class FakeBleDiscoverySource implements BleDiscoverySource {
         deviceId: id,
         name: name,
         rssi: rssi,
+        serviceUuid: serviceUuid,
         serviceData: Uint8List.fromList(data),
       ),
     );

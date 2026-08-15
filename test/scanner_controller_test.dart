@@ -1,4 +1,5 @@
 import 'package:bthome_coast/scanner/scanner_controller.dart';
+import 'package:bthome_coast/bthome/bthome_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fakes.dart';
@@ -46,6 +47,23 @@ void main() {
     expect(denied.isScanning, isFalse);
     expect(denied.error, contains('权限'));
     denied.dispose();
+  });
+
+  test('passes the discovered service UUID to the v1 parser', () async {
+    final source = FakeBleDiscoverySource();
+    final controller = ScannerController(source: source);
+
+    source.emit(
+      serviceUuid: BthomeServiceUuid.v1Unencrypted,
+      data: [0x23, 0x02, 0xc4, 0x09],
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final packet = controller.devices.single.packet;
+    expect(packet.deviceInfo.version, 1);
+    expect(packet.serviceUuid, BthomeServiceUuid.v1Unencrypted);
+    expect(packet.firstByKey('temperature')?.value, 25.0);
+    controller.dispose();
   });
 
   test('skips unsupported authorization before scanning on Windows', () async {

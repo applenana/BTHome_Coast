@@ -21,8 +21,90 @@ void main() {
 
     test('accepts service data with a prefixed 0xFCD2 UUID', () {
       final packet = parser.parse([0xd2, 0xfc, 0x40, 0x01, 0x61]);
+      expect(packet.serviceUuid, BthomeServiceUuid.v2);
       expect(packet.measurements.single.key, 'battery');
       expect(packet.measurements.single.value, 97);
+    });
+
+    test('parses the official BTHome v1 temperature and humidity example', () {
+      final packet = parser.parse([
+        0x23,
+        0x02,
+        0xc4,
+        0x09,
+        0x03,
+        0x03,
+        0xbf,
+        0x13,
+      ], serviceUuid: BthomeServiceUuid.v1Unencrypted);
+
+      expect(packet.serviceUuid, BthomeServiceUuid.v1Unencrypted);
+      expect(packet.deviceInfo.version, 1);
+      expect(packet.deviceInfo.encrypted, isFalse);
+      expect(packet.measurements, hasLength(2));
+      expect(packet.firstByKey('temperature')?.value, 25.0);
+      expect(packet.firstByKey('humidity')?.value, closeTo(50.55, 0.000001));
+      expect(packet.issue, isNull);
+    });
+
+    test('detects a prefixed v1 UUID and parses alarms and signed values', () {
+      final packet = parser.parse([
+        0x1c,
+        0x18,
+        0x02,
+        0x00,
+        0x07,
+        0x23,
+        0x02,
+        0x9c,
+        0xff,
+        0x02,
+        0x18,
+        0x01,
+        0x02,
+        0x1d,
+        0x00,
+      ]);
+
+      expect(packet.deviceInfo.version, 1);
+      expect(packet.firstByKey('packet_id')?.value, 7);
+      expect(packet.firstByKey('temperature')?.value, -1.0);
+      expect(packet.firstByKey('cold')?.value, isTrue);
+      expect(packet.firstByKey('heat')?.value, isFalse);
+      expect(packet.hasActiveAlarm, isTrue);
+    });
+
+    test('uses v1 object lengths to skip unknown objects safely', () {
+      final packet = parser.parse([
+        0x03,
+        0x66,
+        0xde,
+        0xad,
+        0x02,
+        0x01,
+        0x61,
+      ], serviceUuid: BthomeServiceUuid.v1Unencrypted);
+
+      expect(packet.measurements, hasLength(2));
+      expect(packet.measurements.first.key, 'unknown_66');
+      expect(packet.firstByKey('battery')?.value, 97);
+      expect(packet.issue, isNull);
+    });
+
+    test('recognizes encrypted BTHome v1 frames without guessing a key', () {
+      final packet = parser.parse([
+        0xde,
+        0xad,
+        0xbe,
+        0xef,
+      ], serviceUuid: BthomeServiceUuid.v1Encrypted);
+
+      expect(packet.serviceUuid, BthomeServiceUuid.v1Encrypted);
+      expect(packet.deviceInfo.version, 1);
+      expect(packet.deviceInfo.encrypted, isTrue);
+      expect(packet.measurements, isEmpty);
+      expect(packet.remaining, [0xde, 0xad, 0xbe, 0xef]);
+      expect(packet.issue, contains('加密 BTHome v1'));
     });
 
     test('parses alarm flags and signed temperatures', () {
@@ -105,6 +187,15 @@ void main() {
       final truncated = parser.parse([0x40, 0x02, 0x01]);
       expect(truncated.measurements, isEmpty);
       expect(truncated.issue, contains('数据不完整'));
+
+      final truncatedV1 = parser.parse([
+        0x23,
+        0x02,
+        0x01,
+      ], serviceUuid: BthomeServiceUuid.v1Unencrypted);
+      expect(truncatedV1.measurements, isEmpty);
+      expect(truncatedV1.remaining, [0x23, 0x02, 0x01]);
+      expect(truncatedV1.issue, contains('声明 3 字节'));
     });
 
     test('decodes firmware versions in display order', () {

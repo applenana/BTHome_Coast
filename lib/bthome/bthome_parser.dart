@@ -6,20 +6,87 @@ import 'bthome_models.dart';
 class BthomeParser {
   const BthomeParser();
 
-  static const int serviceUuid = 0xfcd2;
+  static const int serviceUuid = BthomeServiceUuid.v2;
 
-  BthomePacket parse(List<int> serviceData) {
+  BthomePacket parse(List<int> serviceData, {int? serviceUuid}) {
     final original = Uint8List.fromList(serviceData);
     var data = original;
+    var resolvedServiceUuid = serviceUuid;
 
-    if (data.length >= 2 &&
-        ((data[0] == 0xd2 && data[1] == 0xfc) ||
-            (data[0] == 0xfc && data[1] == 0xd2))) {
+    final prefix = serviceUuid == null ? _serviceUuidPrefix(data) : null;
+    if (prefix != null) {
+      resolvedServiceUuid = prefix;
       data = Uint8List.sublistView(data, 2);
     }
+    resolvedServiceUuid ??= BthomeServiceUuid.v2;
 
+    if (!BthomeServiceUuid.isSupported(resolvedServiceUuid)) {
+      return BthomePacket(
+        serviceUuid: resolvedServiceUuid,
+        deviceInfo: const BthomeDeviceInfo(
+          raw: 0,
+          version: 0,
+          encrypted: false,
+          triggerBased: false,
+        ),
+        measurements: const [],
+        raw: original,
+        remaining: data,
+        issue:
+            '不支持的 Service UUID 0x${resolvedServiceUuid.toRadixString(16).padLeft(4, '0').toUpperCase()}',
+      );
+    }
+
+    if (resolvedServiceUuid == BthomeServiceUuid.v1Encrypted) {
+      return BthomePacket(
+        serviceUuid: resolvedServiceUuid,
+        deviceInfo: const BthomeDeviceInfo(
+          raw: 0,
+          version: 1,
+          encrypted: true,
+          triggerBased: false,
+        ),
+        measurements: const [],
+        raw: original,
+        remaining: data,
+        issue: '这是加密 BTHome v1 广播；当前未配置绑定密钥，因此只显示密文',
+      );
+    }
+
+    if (resolvedServiceUuid == BthomeServiceUuid.v1Unencrypted) {
+      return _parseV1(original, data, resolvedServiceUuid);
+    }
+
+    return _parseV2(original, data, resolvedServiceUuid);
+  }
+
+  int? _serviceUuidPrefix(Uint8List data) {
+    if (data.length < 2) return null;
+    final first = data[0];
+    final second = data[1];
+    if ((first == 0xd2 && second == 0xfc) ||
+        (first == 0xfc && second == 0xd2)) {
+      return BthomeServiceUuid.v2;
+    }
+    if ((first == 0x1c && second == 0x18) ||
+        (first == 0x18 && second == 0x1c)) {
+      return BthomeServiceUuid.v1Unencrypted;
+    }
+    if ((first == 0x1e && second == 0x18) ||
+        (first == 0x18 && second == 0x1e)) {
+      return BthomeServiceUuid.v1Encrypted;
+    }
+    return null;
+  }
+
+  BthomePacket _parseV2(
+    Uint8List original,
+    Uint8List data,
+    int resolvedServiceUuid,
+  ) {
     if (data.isEmpty) {
       return BthomePacket(
+        serviceUuid: resolvedServiceUuid,
         deviceInfo: const BthomeDeviceInfo(
           raw: 0,
           version: 0,
@@ -42,6 +109,7 @@ class BthomeParser {
 
     if (info.encrypted) {
       return BthomePacket(
+        serviceUuid: resolvedServiceUuid,
         deviceInfo: info,
         measurements: const [],
         raw: original,
@@ -96,11 +164,262 @@ class BthomeParser {
     }
 
     return BthomePacket(
+      serviceUuid: resolvedServiceUuid,
       deviceInfo: info,
       measurements: List.unmodifiable(measurements),
       raw: original,
       issue: issue,
       remaining: offset < data.length ? data.sublist(offset) : const [],
+    );
+  }
+
+  BthomePacket _parseV1(
+    Uint8List original,
+    Uint8List data,
+    int resolvedServiceUuid,
+  ) {
+    const info = BthomeDeviceInfo(
+      raw: 0,
+      version: 1,
+      encrypted: false,
+      triggerBased: false,
+    );
+    final measurements = <BthomeMeasurement>[];
+    final occurrences = <String, int>{};
+    var offset = 0;
+    String? issue;
+
+    while (offset < data.length) {
+      final objectOffset = offset;
+      final control = data[offset++];
+      final objectLength = control & 0x1f;
+      final dataFormat = (control >> 5) & 0x07;
+      if (objectLength < 1) {
+        offset = objectOffset;
+        issue = 'BTHome v1 对象控制字节的长度不能为 0';
+        break;
+      }
+      if (offset + objectLength > data.length) {
+        offset = objectOffset;
+        issue = 'BTHome v1 对象数据不完整：控制字节声明 $objectLength 字节';
+        break;
+      }
+
+      final objectId = data[offset];
+      final valueOffset = offset + 1;
+      final objectEnd = offset + objectLength;
+      try {
+        final measurement = _parseV1Object(
+          objectId,
+          data,
+          valueOffset,
+          objectEnd,
+          dataFormat,
+        );
+        final count = (occurrences[measurement.key] ?? 0) + 1;
+        occurrences[measurement.key] = count;
+        measurements.add(
+          BthomeMeasurement(
+            objectId: measurement.objectId,
+            key: count == 1 ? measurement.key : '${measurement.key}_$count',
+            label: count == 1
+                ? measurement.label
+                : '${measurement.label} $count',
+            value: measurement.value,
+            displayValue: measurement.displayValue,
+            kind: measurement.kind,
+            raw: Uint8List.fromList(data.sublist(objectOffset, objectEnd)),
+            unit: measurement.unit,
+            isAlarm: measurement.isAlarm,
+            alarmWhenValue: measurement.alarmWhenValue,
+          ),
+        );
+        offset = objectEnd;
+      } on _ParseFailure catch (error) {
+        offset = objectOffset;
+        issue = error.message;
+        break;
+      }
+    }
+
+    if (data.isEmpty) issue = 'BTHome v1 Service Data 中没有测量对象';
+    return BthomePacket(
+      serviceUuid: resolvedServiceUuid,
+      deviceInfo: info,
+      measurements: List.unmodifiable(measurements),
+      raw: original,
+      issue: issue,
+      remaining: offset < data.length ? data.sublist(offset) : const [],
+    );
+  }
+
+  BthomeMeasurement _parseV1Object(
+    int id,
+    Uint8List data,
+    int valueOffset,
+    int objectEnd,
+    int dataFormat,
+  ) {
+    final valueLength = objectEnd - valueOffset;
+    final valueBytes = Uint8List.sublistView(data, valueOffset, objectEnd);
+
+    if (id == 0x53 || id == 0x54) {
+      final isText = id == 0x53;
+      final value = isText
+          ? utf8.decode(valueBytes, allowMalformed: true)
+          : bytesToHex(valueBytes);
+      return _measurement(
+        id,
+        isText ? 'text' : 'raw',
+        isText ? '文本' : '原始数据',
+        value,
+        value,
+        isText ? BthomeValueKind.text : BthomeValueKind.raw,
+      );
+    }
+
+    if (id == 0x3a) return _parseButton(valueBytes, 0).measurement;
+    if (id == 0x3c) return _parseDimmer(valueBytes, 0).measurement;
+    if (id == 0xf1 || id == 0xf2) {
+      return _parseVersion(id, valueBytes, 0).measurement;
+    }
+
+    final definition = _definitions[id];
+    if (definition == null) {
+      final value = bytesToHex(valueBytes);
+      return _measurement(
+        id,
+        'unknown_${id.toRadixString(16).padLeft(2, '0')}',
+        '未知对象 ${id.toRadixString(16).padLeft(2, '0').toUpperCase()}',
+        value,
+        value,
+        BthomeValueKind.raw,
+      );
+    }
+
+    if (dataFormat == 3) {
+      final value = utf8.decode(valueBytes, allowMalformed: true);
+      return _measurement(
+        id,
+        definition.key,
+        definition.label,
+        value,
+        value,
+        BthomeValueKind.text,
+      );
+    }
+    if (dataFormat == 4) {
+      final value = valueBytes.reversed
+          .map((byte) => byte.toRadixString(16).padLeft(2, '0').toUpperCase())
+          .join(':');
+      return _measurement(
+        id,
+        definition.key,
+        definition.label,
+        value,
+        value,
+        BthomeValueKind.raw,
+      );
+    }
+    if (dataFormat == 2) {
+      if (valueLength != 4 && valueLength != 8) {
+        throw _ParseFailure(
+          'BTHome v1 浮点对象 0x${id.toRadixString(16)} 长度必须为 4 或 8 字节',
+        );
+      }
+      final bytes = ByteData.sublistView(valueBytes);
+      final rawValue = valueLength == 4
+          ? bytes.getFloat32(0, Endian.little)
+          : bytes.getFloat64(0, Endian.little);
+      return _numericMeasurement(id, definition, rawValue);
+    }
+    if (dataFormat == 0 || dataFormat == 1) {
+      if (valueLength < 1 || valueLength > 8) {
+        throw _ParseFailure('BTHome v1 整数对象 0x${id.toRadixString(16)} 长度无效');
+      }
+      final rawValue = _readInteger(
+        data,
+        valueOffset,
+        valueLength,
+        signed: dataFormat == 1,
+      );
+      return _numericMeasurement(id, definition, rawValue);
+    }
+
+    final value = bytesToHex(valueBytes);
+    return _measurement(
+      id,
+      definition.key,
+      definition.label,
+      value,
+      value,
+      BthomeValueKind.raw,
+    );
+  }
+
+  BthomeMeasurement _numericMeasurement(
+    int id,
+    _Definition definition,
+    num rawValue,
+  ) {
+    if (definition.kind == BthomeValueKind.binary) {
+      final active = rawValue != 0;
+      return _measurement(
+        id,
+        definition.key,
+        definition.label,
+        active,
+        active ? definition.onText : definition.offText,
+        definition.kind,
+        isAlarm: definition.isAlarm,
+        alarmWhenValue: definition.alarmWhenValue,
+      );
+    }
+
+    if (id == 0x50) {
+      final timestamp = DateTime.fromMillisecondsSinceEpoch(
+        rawValue.toInt() * 1000,
+        isUtc: true,
+      );
+      return _measurement(
+        id,
+        definition.key,
+        definition.label,
+        timestamp,
+        timestamp.toIso8601String(),
+        BthomeValueKind.timestamp,
+      );
+    }
+
+    if (id == 0x64) {
+      const labels = ['黑暗', '暮光', '明亮'];
+      final index = rawValue.toInt();
+      final display = index >= 0 && index < labels.length
+          ? labels[index]
+          : '未知 ($rawValue)';
+      return _measurement(
+        id,
+        definition.key,
+        definition.label,
+        rawValue,
+        display,
+        definition.kind,
+      );
+    }
+
+    final scaled = rawValue * definition.factor;
+    final value = definition.factor == 1 ? rawValue : scaled;
+    final display = definition.factor == 1
+        ? rawValue.toString()
+        : scaled.toStringAsFixed(definition.decimals);
+    return _measurement(
+      id,
+      definition.key,
+      definition.label,
+      value,
+      display,
+      definition.kind,
+      unit: definition.unit,
     );
   }
 
@@ -273,9 +592,10 @@ class BthomeParser {
   }
 
   _ParsedObject _parseDimmer(Uint8List data, int offset) {
-    _require(data, offset, 2, 0x3c);
+    _require(data, offset, 1, 0x3c);
     final eventId = data[offset];
-    final steps = data[offset + 1];
+    if (eventId != 0) _require(data, offset, 2, 0x3c);
+    final steps = eventId == 0 ? 0 : data[offset + 1];
     final display = switch (eventId) {
       0 => '无事件',
       1 => '向左旋转 $steps 步',
@@ -291,7 +611,7 @@ class BthomeParser {
         display,
         BthomeValueKind.event,
       ),
-      offset + 2,
+      offset + (eventId == 0 ? 1 : 2),
     );
   }
 

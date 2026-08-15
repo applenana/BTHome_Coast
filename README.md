@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/branding/app_icon.png" width="112" alt="BTHome Coast application icon">
   <h1>BTHome Coast</h1>
-  <p>一个现代、沉浸式的 Android / Windows BTHome v2 BLE 广播调试器。</p>
+  <p>一个现代、沉浸式的 Android / Windows BTHome v1 / v2 BLE 广播解析器。</p>
 
   [![CI](https://github.com/applenana/BTHome_Coast/actions/workflows/ci.yml/badge.svg)](https://github.com/applenana/BTHome_Coast/actions/workflows/ci.yml)
   [![Release](https://github.com/applenana/BTHome_Coast/actions/workflows/release.yml/badge.svg)](https://github.com/applenana/BTHome_Coast/actions/workflows/release.yml)
@@ -12,13 +12,13 @@
 
 ## 简介
 
-BTHome Coast 被设计为一个轻量的现场调试工具：它被动扫描周围 UUID 为 `0xFCD2` 的 BTHome v2 Service Data，不连接设备，并实时展示 RSSI、接收次数、Device Information、测量对象、告警状态和原始十六进制数据。
+BTHome Coast 被设计为一个轻量的现场调试工具：它被动扫描周围 UUID 为 `0x181C`、`0x181E` 或 `0xFCD2` 的 BTHome v1 / v2 Service Data，不连接设备，并实时展示 RSSI、接收次数、协议版本、测量对象、告警状态和原始十六进制数据。
 
 应用面向 Android 真机和 Windows 10/11，使用统一的解析器与蓝白海岸风格界面。扫描期间，多层海浪会持续波动，并以极低音量播放本项目原创的海浪环境声；声音可以随时关闭。
 
 ## 功能
 
-- 被动扫描 BTHome v2 广播，不连接或控制周围设备
+- 被动扫描 BTHome v1 / v2 广播，不连接或控制周围设备
 - 解析数值、二进制传感器、按钮、命令、旋钮、文本、Raw、时间戳和版本对象
 - 正确处理小端数据、有符号数、缩放因子和重复对象
 - 醒目标记高温、低温、烟雾、水浸及其他安全告警
@@ -32,15 +32,16 @@ BTHome Coast 被设计为一个轻量的现场调试工具：它被动扫描周�
 
 ## BTHome 支持范围
 
-解析器依据 [BTHome v2 Format](https://bthome.io/format/) 实现，并只处理 `0xFCD2` Service Data。
+解析器同时依据 [BTHome v1 Format](https://bthome.io/v1/) 和 [BTHome v2 Format](https://bthome.io/format/) 实现。v1 已被协议作者标记为旧版格式，但应用仍可用于调试存量设备。
 
 | 能力 | 状态 |
 | --- | --- |
+| 未加密 BTHome v1（`0x181C`） | 支持 v1 控制字节、动态长度/类型、标准测量、告警和事件对象 |
+| 加密 BTHome v1（`0x181E`） | 识别协议与加密状态并展示密文，不保存或猜测绑定密钥 |
 | 未加密 BTHome v2 | 完整解析已支持的标准对象 |
 | 加密 BTHome v2 | 识别加密标记并展示密文，不保存或猜测设备密钥 |
 | 同一类型重复对象 | 支持，自动生成稳定的重复键名 |
-| 未知或截断对象 | 安全停止解析并展示问题位置 |
-| BTHome v1 | 不支持 |
+| 未知或截断对象 | v1 利用长度字段跳过未知对象；截断帧和 v2 未知对象会安全停止并提示位置 |
 
 ## 获取构建产物
 
@@ -143,7 +144,7 @@ python tool/generate_assets.py
 ```text
 lib/
 ├── audio/       # 海浪环境声播放与状态控制
-├── bthome/      # BTHome v2 数据模型和解析器
+├── bthome/      # BTHome v1 / v2 数据模型和解析器
 ├── scanner/     # BLE 平台适配与扫描状态管理
 └── ui/          # 海岸主题、动画和响应式界面
 assets/          # 原创图标与环境声音
@@ -181,13 +182,13 @@ flutter test
 
 ## English summary
 
-BTHome Coast is an open-source Flutter inspector for passively examining nearby BTHome v2 BLE advertisements on Android and Windows. It decodes unencrypted `0xFCD2` Service Data, highlights alarms, displays raw packets, and includes responsive coastal visuals with optional locally bundled ocean ambience. The app does not connect to devices, send telemetry, or persist scanned advertisements.
+BTHome Coast is an open-source Flutter inspector for passively examining nearby BTHome v1 and v2 BLE advertisements on Android and Windows. It decodes unencrypted `0x181C` and `0xFCD2` Service Data, recognizes encrypted `0x181E` and v2 frames, highlights alarms, displays raw packets, and includes responsive coastal visuals with optional locally bundled ocean ambience. The app does not connect to devices, send telemetry, or persist scanned advertisements.
 
 ## 许可证与致谢
 
 本项目使用 [MIT License](LICENSE)。
 
-- 协议：[BTHome v2 Format](https://bthome.io/format/)
+- 协议：[BTHome v1 Format](https://bthome.io/v1/) / [BTHome v2 Format](https://bthome.io/format/)
 - BLE：[bluetooth_low_energy](https://pub.dev/packages/bluetooth_low_energy)（MIT）
 - 音频：[audioplayers](https://pub.dev/packages/audioplayers)（MIT）
 - UI 框架：[Flutter](https://flutter.dev/)

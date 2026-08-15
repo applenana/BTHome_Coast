@@ -187,7 +187,10 @@ class ScannerController extends ChangeNotifier {
   void _onDiscovered(BleDiscoveredAdvertisement event) {
     final previous = _devices[event.deviceId];
     final name = event.name?.trim();
-    final packet = _parser.parse(event.serviceData);
+    final packet = _parser.parse(
+      event.serviceData,
+      serviceUuid: event.serviceUuid,
+    );
     final snapshot = BthomeDeviceSnapshot(
       deviceId: event.deviceId,
       displayName: name == null || name.isEmpty ? '未命名 BTHome 设备' : name,

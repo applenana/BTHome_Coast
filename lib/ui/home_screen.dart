@@ -210,7 +210,7 @@ class _TopBar extends StatelessWidget {
               ),
             ),
             Text(
-              'BLE 广播调试台 · BTHome v2',
+              'BLE 广播调试台 · BTHome v1 / v2',
               style: TextStyle(color: SeaColors.muted, fontSize: 12),
             ),
           ],
@@ -351,7 +351,7 @@ class _HeroPanel extends StatelessWidget {
                       duration: const Duration(milliseconds: 360),
                       child: Text(
                         controller.isScanning
-                            ? '持续接收 0xFCD2 Service Data，实时更新告警与测量值'
+                            ? '持续接收 0x181C / 0x181E / 0xFCD2，实时更新告警与测量值'
                             : '点击开始扫描；Android 首次运行会请求附近设备权限',
                         key: ValueKey('subtitle-${controller.isScanning}'),
                         maxLines: compact ? 2 : 1,
@@ -745,7 +745,9 @@ class _EmptyDevices extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            scanning ? '确保设备正在广播 BTHome v2 数据' : '开始扫描后，这里只显示含 0xFCD2 的广播',
+            scanning
+                ? '确保设备正在广播 BTHome v1 或 v2 数据'
+                : '开始扫描后，这里只显示 BTHome v1 / v2 广播',
             textAlign: TextAlign.center,
             style: const TextStyle(color: SeaColors.muted, fontSize: 12),
           ),
@@ -1028,10 +1030,11 @@ class _DeviceDetail extends StatelessWidget {
                     : Icons.lock_open_rounded,
                 label: packet.deviceInfo.encrypted ? '已加密' : '明文',
               ),
-              _InfoPill(
-                icon: Icons.bolt_rounded,
-                label: packet.deviceInfo.triggerBased ? '触发式广播' : '周期广播',
-              ),
+              if (packet.deviceInfo.version >= 2)
+                _InfoPill(
+                  icon: Icons.bolt_rounded,
+                  label: packet.deviceInfo.triggerBased ? '触发式广播' : '周期广播',
+                ),
               _InfoPill(
                 icon: Icons.repeat_rounded,
                 label: '接收 ${current.seenCount} 帧',
@@ -1073,9 +1076,9 @@ class _DeviceDetail extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 22),
-          const _SectionTitle(
+          _SectionTitle(
             title: '测量与事件',
-            subtitle: '按 BTHome Object ID 顺序解析',
+            subtitle: '按 BTHome v${packet.deviceInfo.version} 对象格式解析',
           ),
           const SizedBox(height: 11),
           if (packet.measurements.isEmpty)
@@ -1119,10 +1122,10 @@ class _DeviceDetail extends StatelessWidget {
           const SizedBox(height: 22),
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: _SectionTitle(
                   title: '原始 Service Data',
-                  subtitle: 'UUID 0xFCD2 · 十六进制',
+                  subtitle: 'UUID ${packet.serviceUuidHex} · 十六进制',
                 ),
               ),
               IconButton(
