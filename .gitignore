@@ -34,6 +34,14 @@ migrate_working_dir/
 /coverage/
 /artifacts/
 
+# Local configuration, credentials, and signing material
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+
 # Symbolication related
 app.*.symbols
 
