@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.openai.bthome.bthome_debugger"
+    namespace = "com.applenana.bthome_coast"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.openai.bthome.bthome_debugger"
+        applicationId = "com.applenana.bthome_coast"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24

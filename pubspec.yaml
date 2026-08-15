@@ -1,4 +1,4 @@
-name: bthome_debugger
+name: bthome_coast
 description: "A cross-platform BTHome v2 advertisement inspector for Android and Windows."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.

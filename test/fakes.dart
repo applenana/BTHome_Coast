@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:bthome_debugger/audio/ambient_audio_controller.dart';
-import 'package:bthome_debugger/scanner/ble_discovery_source.dart';
+import 'package:bthome_coast/audio/ambient_audio_controller.dart';
+import 'package:bthome_coast/scanner/ble_discovery_source.dart';
 
 class FakeBleDiscoverySource implements BleDiscoverySource {
   FakeBleDiscoverySource({

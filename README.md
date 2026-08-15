@@ -3,7 +3,7 @@
   <h1>BTHome Coast</h1>
   <p>一个现代、沉浸式的 Android / Windows BTHome v2 BLE 广播调试器。</p>
 
-  [![CI](https://github.com/applenana/BTHome_Debugger/actions/workflows/ci.yml/badge.svg)](https://github.com/applenana/BTHome_Debugger/actions/workflows/ci.yml)
+  [![CI](https://github.com/applenana/BTHome_Coast/actions/workflows/ci.yml/badge.svg)](https://github.com/applenana/BTHome_Coast/actions/workflows/ci.yml)
   [![Flutter 3.41.9](https://img.shields.io/badge/Flutter-3.41.9-36b9e6?logo=flutter&logoColor=white)](https://flutter.dev/)
   [![Platforms](https://img.shields.io/badge/platform-Android%20%7C%20Windows-087fa8)](#运行环境)
   [![License: MIT](https://img.shields.io/badge/License-MIT-29a9c9.svg)](LICENSE)
@@ -43,7 +43,7 @@ BTHome Coast 被设计为一个轻量的现场调试工具：它被动扫描周�
 
 ## 获取构建产物
 
-每次推送到 `main` 或提交 Pull Request 时，[GitHub Actions](https://github.com/applenana/BTHome_Debugger/actions/workflows/ci.yml) 会执行静态分析、自动化测试，并生成：
+每次推送到 `main` 或提交 Pull Request 时，[GitHub Actions](https://github.com/applenana/BTHome_Coast/actions/workflows/ci.yml) 会执行静态分析、自动化测试，并生成：
 
 - `BTHome-Coast-Android`：包含 ARM64、32 位 ARM 和 x86_64 三个 APK
 - `BTHome-Coast-Windows-x64`：包含 `BTHome_Coast.exe`、Flutter DLL、BLE/音频插件和数据文件的完整 ZIP
@@ -69,8 +69,8 @@ Windows 用户必须解压完整 ZIP 后运行 `BTHome_Coast.exe`，不能只复
 ## 从源码运行
 
 ```powershell
-git clone https://github.com/applenana/BTHome_Debugger.git
-cd BTHome_Debugger
+git clone https://github.com/applenana/BTHome_Coast.git
+cd BTHome_Coast
 flutter pub get
 flutter analyze
 flutter test
@@ -158,7 +158,7 @@ flutter test
 
 ## English summary
 
-BTHome Coast is an open-source Flutter debugger for passively inspecting nearby BTHome v2 BLE advertisements on Android and Windows. It decodes unencrypted `0xFCD2` Service Data, highlights alarms, displays raw packets, and includes responsive coastal visuals with optional locally bundled ocean ambience. The app does not connect to devices, send telemetry, or persist scanned advertisements.
+BTHome Coast is an open-source Flutter inspector for passively examining nearby BTHome v2 BLE advertisements on Android and Windows. It decodes unencrypted `0xFCD2` Service Data, highlights alarms, displays raw packets, and includes responsive coastal visuals with optional locally bundled ocean ambience. The app does not connect to devices, send telemetry, or persist scanned advertisements.
 
 ## 许可证与致谢
 

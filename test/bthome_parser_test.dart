@@ -1,5 +1,5 @@
-import 'package:bthome_debugger/bthome/bthome_models.dart';
-import 'package:bthome_debugger/bthome/bthome_parser.dart';
+import 'package:bthome_coast/bthome/bthome_models.dart';
+import 'package:bthome_coast/bthome/bthome_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

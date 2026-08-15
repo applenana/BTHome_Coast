@@ -9,15 +9,15 @@ import 'ui/home_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
-    BthomeDebuggerApp(
+    BthomeCoastApp(
       controller: ScannerController(source: SystemBleDiscoverySource()),
       ambientAudio: OceanAmbientAudioController(),
     ),
   );
 }
 
-class BthomeDebuggerApp extends StatefulWidget {
-  const BthomeDebuggerApp({
+class BthomeCoastApp extends StatefulWidget {
+  const BthomeCoastApp({
     super.key,
     required this.controller,
     this.ambientAudio,
@@ -27,10 +27,10 @@ class BthomeDebuggerApp extends StatefulWidget {
   final AmbientAudioController? ambientAudio;
 
   @override
-  State<BthomeDebuggerApp> createState() => _BthomeDebuggerAppState();
+  State<BthomeCoastApp> createState() => _BthomeCoastAppState();
 }
 
-class _BthomeDebuggerAppState extends State<BthomeDebuggerApp> {
+class _BthomeCoastAppState extends State<BthomeCoastApp> {
   late final AmbientAudioController _ambientAudio =
       widget.ambientAudio ?? SilentAmbientAudioController();
 

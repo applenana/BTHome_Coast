@@ -1,5 +1,5 @@
-import 'package:bthome_debugger/main.dart';
-import 'package:bthome_debugger/scanner/scanner_controller.dart';
+import 'package:bthome_coast/main.dart';
+import 'package:bthome_coast/scanner/scanner_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -14,7 +14,7 @@ void main() {
     final controller = ScannerController(source: source);
     final ambientAudio = FakeAmbientAudioController();
     await tester.pumpWidget(
-      BthomeDebuggerApp(controller: controller, ambientAudio: ambientAudio),
+      BthomeCoastApp(controller: controller, ambientAudio: ambientAudio),
     );
 
     expect(find.text('BTHome Coast'), findsOneWidget);
@@ -53,7 +53,7 @@ void main() {
 
     final controller = ScannerController(source: FakeBleDiscoverySource());
     await tester.pumpWidget(
-      BthomeDebuggerApp(
+      BthomeCoastApp(
         controller: controller,
         ambientAudio: FakeAmbientAudioController(),
       ),

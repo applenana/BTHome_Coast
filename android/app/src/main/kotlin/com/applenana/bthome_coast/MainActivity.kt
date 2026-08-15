@@ -1,4 +1,4 @@
-package com.openai.bthome.bthome_debugger
+package com.applenana.bthome_coast
 
 import io.flutter.embedding.android.FlutterActivity
 
