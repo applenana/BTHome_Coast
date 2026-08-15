@@ -1,0 +1,291 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: 3.41.9
+
+jobs:
+  metadata:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Require a vX.Y.Z tag
+        id: version
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tags must use the vX.Y.Z format, for example v1.2.3." >&2
+            exit 1
+          fi
+          echo "version=${tag#v}" >> "${GITHUB_OUTPUT}"
+
+  quality:
+    name: Analyze and test
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test --reporter expanded
+
+  android:
+    name: Build Android packages
+    needs: [metadata, quality]
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      VERSION: ${{ needs.metadata.outputs.version }}
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build architecture-specific APKs
+        shell: bash
+        run: >-
+          flutter build apk
+          --release
+          --split-per-abi
+          --build-name "${VERSION}"
+          --build-number "${GITHUB_RUN_NUMBER}"
+          --no-pub
+
+      - name: Collect architecture-specific APKs
+        shell: bash
+        run: |
+          mkdir -p dist/android
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+            "dist/android/BTHome-Coast-v${VERSION}-Android-arm64-v8a.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
+            "dist/android/BTHome-Coast-v${VERSION}-Android-armeabi-v7a.apk"
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk \
+            "dist/android/BTHome-Coast-v${VERSION}-Android-x86_64.apk"
+
+      - name: Build universal APK
+        shell: bash
+        run: >-
+          flutter build apk
+          --release
+          --build-name "${VERSION}"
+          --build-number "${GITHUB_RUN_NUMBER}"
+          --no-pub
+
+      - name: Collect universal APK
+        shell: bash
+        run: >-
+          cp build/app/outputs/flutter-apk/app-release.apk
+          "dist/android/BTHome-Coast-v${VERSION}-Android-universal.apk"
+
+      - name: Upload Android release packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-android-${{ github.ref_name }}
+          path: dist/android/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    name: Build Windows packages
+    needs: [metadata, quality]
+    runs-on: windows-2025
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.metadata.outputs.version }}
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        shell: pwsh
+        run: >-
+          flutter build windows
+          --release
+          --build-name "$env:VERSION"
+          --build-number "$env:GITHUB_RUN_NUMBER"
+          --no-pub
+
+      - name: Create portable package
+        shell: pwsh
+        run: |
+          $releaseDir = (Resolve-Path 'build\windows\x64\runner\Release').Path
+          $distDir = Join-Path $PWD 'dist\windows'
+          New-Item -ItemType Directory -Path $distDir -Force | Out-Null
+          $portable = Join-Path $distDir "BTHome-Coast-v$env:VERSION-Windows-x64-Portable.zip"
+          Compress-Archive -Path (Join-Path $releaseDir '*') `
+            -DestinationPath $portable -CompressionLevel Optimal
+
+      - name: Build Inno Setup installer
+        shell: pwsh
+        run: |
+          $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          )
+          $iscc = if ($command) {
+            $command.Source
+          } else {
+            $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          }
+          if (-not $iscc) {
+            throw 'Inno Setup compiler ISCC.exe was not found on the runner.'
+          }
+
+          & $iscc "/DMyAppVersion=$env:VERSION" 'packaging\windows\BTHome_Coast.iss'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit code $LASTEXITCODE."
+          }
+
+          $setups = @(Get-ChildItem 'dist\windows' -Filter "BTHome-Coast-v$env:VERSION-Windows-x64-Setup.exe")
+          if ($setups.Count -ne 1) {
+            throw "Expected one installer, found $($setups.Count)."
+          }
+
+      - name: Upload Windows release packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-windows-${{ github.ref_name }}
+          path: dist/windows/*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    needs: [metadata, android, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.metadata.outputs.version }}
+    steps:
+      - name: Check out complete tag history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download Android packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-android-${{ github.ref_name }}
+          path: release-assets
+
+      - name: Download Windows packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-windows-${{ github.ref_name }}
+          path: release-assets
+
+      - name: Verify assets and write checksums
+        shell: bash
+        run: |
+          mapfile -t assets < <(find release-assets -maxdepth 1 -type f | sort)
+          if [[ "${#assets[@]}" -ne 6 ]]; then
+            printf 'Expected 6 release packages, found %s:\n' "${#assets[@]}" >&2
+            printf '  %s\n' "${assets[@]}" >&2
+            exit 1
+          fi
+          (cd release-assets && LC_ALL=C sha256sum * > SHA256SUMS.txt)
+
+      - name: Write commit log between tags
+        shell: bash
+        run: |
+          tag_commit="$(git rev-list -n 1 "${GITHUB_REF_NAME}")"
+          previous_tag="$(git describe --tags --match 'v[0-9]*' --abbrev=0 "${tag_commit}^" 2>/dev/null || true)"
+
+          {
+            echo '## 安装包说明'
+            echo
+            echo '- Android `arm64-v8a`：大多数现代 Android 真机（推荐）'
+            echo '- Android `armeabi-v7a`：较旧的 32 位 ARM 设备'
+            echo '- Android `x86_64`：x86_64 模拟器或设备'
+            echo '- Android `universal`：兼容以上架构，文件体积较大'
+            echo '- Windows `Portable.zip`：完整解压后运行 `BTHome_Coast.exe`'
+            echo '- Windows `Setup.exe`：带卸载入口和快捷方式的安装包'
+            echo '- `SHA256SUMS.txt`：全部安装包的 SHA-256 校验值'
+            echo
+            echo '> Android APK 使用项目当前的调试签名，适合直接侧载测试；Windows 成品尚未进行商业代码签名。'
+            echo
+            echo '## Commit 日志'
+            echo
+
+            if [[ -n "${previous_tag}" ]]; then
+              echo "变更范围：[${previous_tag}...${GITHUB_REF_NAME}](https://github.com/${GITHUB_REPOSITORY}/compare/${previous_tag}...${GITHUB_REF_NAME})"
+              echo
+              range="${previous_tag}..${GITHUB_REF_NAME}"
+            else
+              echo '首次发布：列出当前标签可达的全部提交。'
+              echo
+              range="${GITHUB_REF_NAME}"
+            fi
+
+            git log --reverse \
+              --format="- [%h](https://github.com/${GITHUB_REPOSITORY}/commit/%H) %s" \
+              "${range}"
+          } > release-notes.md
+
+      - name: Publish release and assets
+        shell: bash
+        run: >-
+          gh release create "${GITHUB_REF_NAME}"
+          release-assets/*
+          --repo "${GITHUB_REPOSITORY}"
+          --verify-tag
+          --fail-on-no-commits
+          --title "BTHome Coast ${GITHUB_REF_NAME}"
+          --notes-file release-notes.md

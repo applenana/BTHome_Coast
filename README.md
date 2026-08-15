@@ -4,6 +4,7 @@
   <p>一个现代、沉浸式的 Android / Windows BTHome v2 BLE 广播调试器。</p>
 
   [![CI](https://github.com/applenana/BTHome_Coast/actions/workflows/ci.yml/badge.svg)](https://github.com/applenana/BTHome_Coast/actions/workflows/ci.yml)
+  [![Release](https://github.com/applenana/BTHome_Coast/actions/workflows/release.yml/badge.svg)](https://github.com/applenana/BTHome_Coast/actions/workflows/release.yml)
   [![Flutter 3.41.9](https://img.shields.io/badge/Flutter-3.41.9-36b9e6?logo=flutter&logoColor=white)](https://flutter.dev/)
   [![Platforms](https://img.shields.io/badge/platform-Android%20%7C%20Windows-087fa8)](#运行环境)
   [![License: MIT](https://img.shields.io/badge/License-MIT-29a9c9.svg)](LICENSE)
@@ -50,6 +51,24 @@ BTHome Coast 被设计为一个轻量的现场调试工具：它被动扫描周�
 
 Windows 用户必须解压完整 ZIP 后运行 `BTHome_Coast.exe`，不能只复制 EXE。CI 生成的 APK 使用调试签名，仅用于安装测试；发布到应用商店前应配置正式签名。
 
+### 标签自动发版
+
+向 GitHub 推送三段式版本标签会自动创建 [GitHub Release](https://github.com/applenana/BTHome_Coast/releases)：
+
+```powershell
+git tag -a v1.2.0 -m "BTHome Coast v1.2.0"
+git push origin v1.2.0
+```
+
+标签必须严格使用 `vX.Y.Z` 格式。`.github/workflows/release.yml` 会先执行格式、静态分析与测试，通过后发布：
+
+- Android：`arm64-v8a`、`armeabi-v7a`、`x86_64` 和 `universal` 四个 APK
+- Windows：完整便携版 ZIP 和带卸载入口、开始菜单快捷方式的 Inno Setup 安装包
+- `SHA256SUMS.txt`：全部安装包的 SHA-256 校验值
+- Release 正文：上一个可达版本标签到当前标签之间的完整 Commit 日志和 Compare 链接
+
+GitHub 自动构建的 Android APK 使用项目当前的调试签名，适合直接侧载；Windows 安装包未进行商业代码签名，首次运行时 Windows 可能显示信誉提示。应用商店或正式商业分发前，应改用私有签名证书。
+
 ### Android ABI 选择
 
 | 文件后缀 | 适用设备 |
@@ -57,6 +76,7 @@ Windows 用户必须解压完整 ZIP 后运行 `BTHome_Coast.exe`，不能只复
 | `arm64-v8a` | 大多数现代 Android 手机，推荐 |
 | `armeabi-v7a` | 较旧的 32 位 ARM 设备 |
 | `x86_64` | Android 模拟器或少量 x86_64 设备 |
+| `universal` | 同时包含以上架构，兼容性最高但体积较大 |
 
 ## 运行环境
 
@@ -129,6 +149,7 @@ lib/
 assets/          # 原创图标与环境声音
 android/         # Android 平台工程与权限配置
 windows/         # Windows Runner、图标与插件注册
+packaging/       # Windows Inno Setup 安装包定义
 test/            # 协议、控制器和界面测试
 tool/            # 可重复生成资产的脚本
 ```
@@ -143,6 +164,8 @@ tool/            # 可重复生成资产的脚本
 4. 将双平台成品上传为 Workflow Artifacts
 
 工作流中的第三方 Actions 均锁定到完整提交 SHA，降低供应链漂移风险。
+
+`.github/workflows/release.yml` 只在推送 `vX.Y.Z` 标签时运行；它复用同一质量门，构建六个发行包，计算校验值，并在全部平台成功后原子化创建 GitHub Release。任一测试、构建或打包步骤失败时都不会发布不完整 Release。
 
 ## 参与贡献
 
