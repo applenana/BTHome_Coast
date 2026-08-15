@@ -13,6 +13,7 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 MASTER_ICON = ROOT / "assets" / "branding" / "app_icon_master.png"
+ANDROID_ADAPTIVE_MARK_FRACTION = 0.40
 
 
 def _save_resized(source: Image.Image, path: Path, size: int) -> None:
@@ -91,7 +92,10 @@ def generate_icons() -> None:
     }
     for folder, canvas_size in foreground_sizes.items():
         canvas = Image.new("RGBA", (canvas_size, canvas_size), (255, 255, 255, 0))
-        target_width = round(canvas_size * 0.62)
+        # Adaptive launchers crop the 108 dp foreground canvas to a much
+        # smaller safe zone. Keeping the mark at 40% makes its visible scale
+        # match the Windows icon instead of filling the launcher mask.
+        target_width = round(canvas_size * ANDROID_ADAPTIVE_MARK_FRACTION)
         target_height = round(mark.height * target_width / mark.width)
         resized_mark = mark.resize(
             (target_width, target_height),
