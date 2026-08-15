@@ -105,10 +105,43 @@ jobs:
           -DestinationPath build/BTHome-Coast-Windows-x64.zip
           -CompressionLevel Optimal
 
+      - name: Compile Windows installer
+        shell: pwsh
+        run: |
+          $versionMatch = [regex]::Match(
+            (Get-Content 'pubspec.yaml' -Raw),
+            '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)'
+          )
+          if (-not $versionMatch.Success) {
+            throw 'Could not read a three-part version from pubspec.yaml.'
+          }
+
+          $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          )
+          $iscc = if ($command) {
+            $command.Source
+          } else {
+            $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          }
+          if (-not $iscc) {
+            throw 'Inno Setup compiler ISCC.exe was not found on the runner.'
+          }
+
+          $version = $versionMatch.Groups[1].Value
+          & $iscc "/DMyAppVersion=$version" 'packaging\windows\BTHome_Coast.iss'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit code $LASTEXITCODE."
+          }
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: BTHome-Coast-Windows-x64
-          path: build/BTHome-Coast-Windows-x64.zip
+          path: |
+            build/BTHome-Coast-Windows-x64.zip
+            dist/windows/*-Setup.exe
           if-no-files-found: error
           retention-days: 14

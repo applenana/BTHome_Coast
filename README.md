@@ -160,7 +160,7 @@ tool/            # 可重复生成资产的脚本
 
 1. 格式检查、`flutter analyze` 和全部自动化测试
 2. Android 三 ABI Release APK 构建
-3. Windows x64 Release 构建和完整目录压缩
+3. Windows x64 Release 构建、便携目录压缩和 Inno Setup 安装包烟雾编译
 4. 将双平台成品上传为 Workflow Artifacts
 
 工作流中的第三方 Actions 均锁定到完整提交 SHA，降低供应链漂移风险。
