@@ -8,7 +8,7 @@ import struct
 import wave
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,9 +39,28 @@ def _extract_white_mark(source: Image.Image) -> Image.Image:
     return output
 
 
+def _rounded_square(source: Image.Image, radius_fraction: float = 0.24) -> Image.Image:
+    rounded = source.convert("RGBA")
+    mask = Image.new("L", rounded.size, 0)
+    draw = ImageDraw.Draw(mask)
+    radius = round(min(rounded.size) * radius_fraction)
+    draw.rounded_rectangle(
+        (0, 0, rounded.width - 1, rounded.height - 1),
+        radius=radius,
+        fill=255,
+    )
+    rounded.putalpha(mask)
+    return rounded
+
+
 def generate_icons() -> None:
     master = Image.open(MASTER_ICON).convert("RGB")
-    _save_resized(master, ROOT / "assets" / "branding" / "app_icon.png", 256)
+    rounded_master = _rounded_square(master)
+    _save_resized(
+        rounded_master,
+        ROOT / "assets" / "branding" / "app_icon.png",
+        256,
+    )
 
     legacy_sizes = {
         "mipmap-mdpi": 48,
@@ -52,7 +71,11 @@ def generate_icons() -> None:
     }
     android_res = ROOT / "android" / "app" / "src" / "main" / "res"
     for folder, size in legacy_sizes.items():
-        _save_resized(master, android_res / folder / "ic_launcher.png", size)
+        _save_resized(
+            rounded_master,
+            android_res / folder / "ic_launcher.png",
+            size,
+        )
 
     mark = _extract_white_mark(Image.open(MASTER_ICON))
     bounds = mark.getbbox()
@@ -85,7 +108,7 @@ def generate_icons() -> None:
 
     windows_icon = ROOT / "windows" / "runner" / "resources" / "app_icon.ico"
     windows_icon.parent.mkdir(parents=True, exist_ok=True)
-    master.save(
+    rounded_master.save(
         windows_icon,
         format="ICO",
         sizes=[(16, 16), (20, 20), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)],

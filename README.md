@@ -40,6 +40,8 @@ flutter build windows --debug
 
 海浪环境声只会在扫描期间播放，默认音量为 5.5%；点击扫描按钮旁的音量图标可立即静音或恢复。
 
+Windows Release 的主程序名为 `BTHome_Coast.exe`，文件属性中的产品名称为 `BTHome Coast`；Windows 和旧版 Android 使用同比例透明圆角外形，Android 8 以上由启动器自适应蒙版。
+
 Android 12 及更高版本首次扫描会请求“附近设备”权限；Android 11 及以下版本使用定位权限完成 BLE 扫描。应用声明 `neverForLocation`，不会请求或读取位置信息。
 
 ## 目录
