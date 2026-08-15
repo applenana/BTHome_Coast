@@ -6,15 +6,19 @@ import 'package:bthome_debugger/scanner/ble_discovery_source.dart';
 class FakeBleDiscoverySource implements BleDiscoverySource {
   FakeBleDiscoverySource({
     this.authorized = true,
+    this.requiresAuthorization = true,
     BleAdapterStatus status = BleAdapterStatus.poweredOn,
   }) : _status = status;
 
   final bool authorized;
+  @override
+  final bool requiresAuthorization;
   final _statuses = StreamController<BleAdapterStatus>.broadcast();
   final _discoveries = StreamController<BleDiscoveredAdvertisement>.broadcast();
   BleAdapterStatus _status;
   bool started = false;
   bool disposed = false;
+  int authorizationCalls = 0;
 
   @override
   BleAdapterStatus get currentStatus => _status;
@@ -26,7 +30,10 @@ class FakeBleDiscoverySource implements BleDiscoverySource {
   Stream<BleDiscoveredAdvertisement> get discoveries => _discoveries.stream;
 
   @override
-  Future<bool> authorize() async => authorized;
+  Future<bool> authorize() async {
+    authorizationCalls++;
+    return authorized;
+  }
 
   @override
   Future<void> start() async => started = true;

@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:bluetooth_low_energy/bluetooth_low_energy.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 
 enum BleAdapterStatus {
   unknown,
@@ -27,6 +29,7 @@ class BleDiscoveredAdvertisement {
 
 abstract interface class BleDiscoverySource {
   BleAdapterStatus get currentStatus;
+  bool get requiresAuthorization;
   Stream<BleAdapterStatus> get statuses;
   Stream<BleDiscoveredAdvertisement> get discoveries;
   Future<bool> authorize();
@@ -53,6 +56,10 @@ class SystemBleDiscoverySource implements BleDiscoverySource {
 
   @override
   BleAdapterStatus get currentStatus => _mapState(_manager.state);
+
+  @override
+  bool get requiresAuthorization =>
+      defaultTargetPlatform != TargetPlatform.windows;
 
   @override
   Stream<BleAdapterStatus> get statuses => _statusController.stream;

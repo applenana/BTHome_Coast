@@ -108,7 +108,8 @@ class ScannerController extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final authorized = await _source.authorize();
+      final authorized =
+          !_source.requiresAuthorization || await _source.authorize();
       _status = _source.currentStatus;
       if (!authorized || _status == BleAdapterStatus.unauthorized) {
         throw StateError('未获得“附近设备/蓝牙”权限，请在系统设置中允许后重试');

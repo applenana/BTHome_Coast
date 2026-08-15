@@ -47,4 +47,20 @@ void main() {
     expect(denied.error, contains('权限'));
     denied.dispose();
   });
+
+  test('skips unsupported authorization before scanning on Windows', () async {
+    final source = FakeBleDiscoverySource(
+      authorized: false,
+      requiresAuthorization: false,
+    );
+    final controller = ScannerController(source: source);
+
+    await controller.startScanning();
+
+    expect(source.authorizationCalls, 0);
+    expect(source.started, isTrue);
+    expect(controller.isScanning, isTrue);
+    expect(controller.error, isNull);
+    controller.dispose();
+  });
 }
