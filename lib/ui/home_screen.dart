@@ -1,20 +1,56 @@
+import 'dart:async';
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../audio/ambient_audio_controller.dart';
 import '../bthome/bthome_models.dart';
 import '../scanner/ble_discovery_source.dart';
 import '../scanner/scanner_controller.dart';
 import 'app_theme.dart';
 
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, required this.controller});
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({
+    super.key,
+    required this.controller,
+    required this.ambientAudio,
+  });
 
   final ScannerController controller;
+  final AmbientAudioController ambientAudio;
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late final Listenable _uiListenable;
+
+  ScannerController get controller => widget.controller;
+  AmbientAudioController get ambientAudio => widget.ambientAudio;
+
+  @override
+  void initState() {
+    super.initState();
+    _uiListenable = Listenable.merge([controller, ambientAudio]);
+    controller.addListener(_syncAmbientAudio);
+    unawaited(ambientAudio.setScanning(controller.isScanning));
+  }
+
+  void _syncAmbientAudio() {
+    unawaited(ambientAudio.setScanning(controller.isScanning));
+  }
+
+  @override
+  void dispose() {
+    controller.removeListener(_syncAmbientAudio);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: controller,
+    animation: _uiListenable,
     builder: (context, _) => Scaffold(
       body: Stack(
         children: [
@@ -37,7 +73,11 @@ class HomeScreen extends StatelessWidget {
                         children: [
                           _TopBar(controller: controller),
                           const SizedBox(height: 14),
-                          _HeroPanel(controller: controller, compact: !desktop),
+                          _HeroPanel(
+                            controller: controller,
+                            ambientAudio: ambientAudio,
+                            compact: !desktop,
+                          ),
                           if (controller.error != null) ...[
                             const SizedBox(height: 10),
                             _ErrorBanner(controller: controller),
@@ -137,11 +177,6 @@ class _TopBar extends StatelessWidget {
         width: 44,
         height: 44,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [SeaColors.cyan, SeaColors.ocean],
-          ),
           borderRadius: BorderRadius.circular(15),
           boxShadow: [
             BoxShadow(
@@ -151,7 +186,14 @@ class _TopBar extends StatelessWidget {
             ),
           ],
         ),
-        child: const Icon(Icons.waves_rounded, color: Colors.white),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(15),
+          child: Image.asset(
+            'assets/branding/app_icon.png',
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
+          ),
+        ),
       ),
       const SizedBox(width: 12),
       const Expanded(
@@ -192,7 +234,9 @@ class _AdapterBadge extends StatelessWidget {
       BleAdapterStatus.unsupported => ('不支持 BLE', SeaColors.coral),
       BleAdapterStatus.unknown => ('正在检查', SeaColors.muted),
     };
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 360),
+      curve: Curves.easeOutCubic,
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.8),
@@ -223,12 +267,19 @@ class _AdapterBadge extends StatelessWidget {
 }
 
 class _HeroPanel extends StatelessWidget {
-  const _HeroPanel({required this.controller, required this.compact});
+  const _HeroPanel({
+    required this.controller,
+    required this.ambientAudio,
+    required this.compact,
+  });
   final ScannerController controller;
+  final AmbientAudioController ambientAudio;
   final bool compact;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => AnimatedContainer(
+    duration: const Duration(milliseconds: 520),
+    curve: Curves.easeOutCubic,
     height: compact ? 142 : 168,
     clipBehavior: Clip.antiAlias,
     decoration: BoxDecoration(
@@ -240,15 +291,17 @@ class _HeroPanel extends StatelessWidget {
       borderRadius: BorderRadius.circular(28),
       boxShadow: [
         BoxShadow(
-          color: SeaColors.ocean.withValues(alpha: 0.2),
-          blurRadius: 28,
-          offset: const Offset(0, 14),
+          color: SeaColors.ocean.withValues(
+            alpha: controller.isScanning ? 0.27 : 0.2,
+          ),
+          blurRadius: controller.isScanning ? 36 : 28,
+          offset: Offset(0, controller.isScanning ? 16 : 14),
         ),
       ],
     ),
     child: Stack(
       children: [
-        const Positioned.fill(child: CustomPaint(painter: _WavePainter())),
+        Positioned.fill(child: _ListeningWaves(active: controller.isScanning)),
         Positioned(
           left: compact ? 20 : 28,
           top: compact ? 19 : 25,
@@ -260,28 +313,54 @@ class _HeroPanel extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      controller.isScanning ? '正在聆听附近广播' : '准备发现 BTHome 设备',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: compact ? 21 : 28,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.8,
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 420),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position:
+                              Tween<Offset>(
+                                begin: const Offset(0, 0.18),
+                                end: Offset.zero,
+                              ).animate(
+                                CurvedAnimation(
+                                  parent: animation,
+                                  curve: Curves.easeOutCubic,
+                                ),
+                              ),
+                          child: child,
+                        ),
+                      ),
+                      child: Text(
+                        controller.isScanning ? '正在聆听附近广播' : '准备发现 BTHome 设备',
+                        key: ValueKey(controller.isScanning),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: compact ? 21 : 28,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.8,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      controller.isScanning
-                          ? '持续接收 0xFCD2 Service Data，实时更新告警与测量值'
-                          : '点击开始扫描；Android 首次运行会请求附近设备权限',
-                      maxLines: compact ? 2 : 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.82),
-                        fontSize: compact ? 12 : 13,
-                        height: 1.4,
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 360),
+                      child: Text(
+                        controller.isScanning
+                            ? '持续接收 0xFCD2 Service Data，实时更新告警与测量值'
+                            : '点击开始扫描；Android 首次运行会请求附近设备权限',
+                        key: ValueKey('subtitle-${controller.isScanning}'),
+                        maxLines: compact ? 2 : 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.82),
+                          fontSize: compact ? 12 : 13,
+                          height: 1.4,
+                        ),
                       ),
                     ),
                     const Spacer(),
@@ -307,33 +386,63 @@ class _HeroPanel extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              FilledButton.icon(
-                key: const Key('scan-button'),
-                onPressed: controller.isBusy ? null : controller.toggleScanning,
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: SeaColors.ocean,
-                  disabledBackgroundColor: Colors.white.withValues(alpha: 0.75),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 14 : 20,
-                    vertical: compact ? 13 : 16,
+              Flex(
+                direction: compact ? Axis.vertical : Axis.horizontal,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _AmbientSoundButton(
+                    ambientAudio: ambientAudio,
+                    scanning: controller.isScanning,
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(17),
-                  ),
-                ),
-                icon: controller.isBusy
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2.3),
-                      )
-                    : Icon(
-                        controller.isScanning
-                            ? Icons.stop_rounded
-                            : Icons.radar_rounded,
+                  SizedBox(width: compact ? 0 : 8, height: compact ? 8 : 0),
+                  FilledButton.icon(
+                    key: const Key('scan-button'),
+                    onPressed: controller.isBusy
+                        ? null
+                        : controller.toggleScanning,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: SeaColors.ocean,
+                      disabledBackgroundColor: Colors.white.withValues(
+                        alpha: 0.75,
                       ),
-                label: Text(controller.isScanning ? '停止' : '扫描'),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: compact ? 14 : 20,
+                        vertical: compact ? 13 : 16,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(17),
+                      ),
+                    ),
+                    icon: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      transitionBuilder: (child, animation) =>
+                          ScaleTransition(scale: animation, child: child),
+                      child: controller.isBusy
+                          ? const SizedBox(
+                              key: ValueKey('busy'),
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.3,
+                              ),
+                            )
+                          : Icon(
+                              controller.isScanning
+                                  ? Icons.stop_rounded
+                                  : Icons.radar_rounded,
+                              key: ValueKey(controller.isScanning),
+                            ),
+                    ),
+                    label: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      child: Text(
+                        controller.isScanning ? '停止' : '扫描',
+                        key: ValueKey('label-${controller.isScanning}'),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -341,6 +450,62 @@ class _HeroPanel extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _AmbientSoundButton extends StatelessWidget {
+  const _AmbientSoundButton({
+    required this.ambientAudio,
+    required this.scanning,
+  });
+
+  final AmbientAudioController ambientAudio;
+  final bool scanning;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = ambientAudio.enabled;
+    final label = enabled ? '关闭海浪环境声' : '开启海浪环境声';
+    return Semantics(
+      button: true,
+      label: label,
+      child: Tooltip(
+        message: ambientAudio.error ?? label,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 360),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: enabled && scanning
+                ? [
+                    BoxShadow(
+                      color: Colors.white.withValues(alpha: 0.32),
+                      blurRadius: 18,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : const [],
+          ),
+          child: IconButton.filled(
+            key: const Key('ambient-audio-button'),
+            onPressed: () => unawaited(ambientAudio.toggleEnabled()),
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.94),
+              foregroundColor: enabled ? SeaColors.ocean : SeaColors.muted,
+            ),
+            icon: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              transitionBuilder: (child, animation) =>
+                  ScaleTransition(scale: animation, child: child),
+              child: Icon(
+                enabled ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                key: ValueKey(enabled),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _HeroStat extends StatelessWidget {
@@ -352,12 +517,20 @@ class _HeroStat extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.end,
     children: [
-      Text(
-        value,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 22,
-          fontWeight: FontWeight.w800,
+      AnimatedSwitcher(
+        duration: const Duration(milliseconds: 360),
+        transitionBuilder: (child, animation) => ScaleTransition(
+          scale: Tween<double>(begin: 0.82, end: 1).animate(animation),
+          child: FadeTransition(opacity: animation, child: child),
+        ),
+        child: Text(
+          value,
+          key: ValueKey(value),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ),
       const SizedBox(width: 5),
@@ -1241,41 +1414,132 @@ class _SeaBackground extends StatelessWidget {
   );
 }
 
-class _WavePainter extends CustomPainter {
-  const _WavePainter();
+class _ListeningWaves extends StatefulWidget {
+  const _ListeningWaves({required this.active});
+
+  final bool active;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.white.withValues(alpha: 0.12);
-    final path = Path()
-      ..moveTo(0, size.height * 0.7)
-      ..cubicTo(
-        size.width * 0.22,
-        size.height * 0.52,
-        size.width * 0.36,
-        size.height * 0.92,
-        size.width * 0.58,
-        size.height * 0.7,
-      )
-      ..cubicTo(
-        size.width * 0.78,
-        size.height * 0.5,
-        size.width * 0.88,
-        size.height * 0.78,
-        size.width,
-        size.height * 0.61,
-      )
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    canvas.drawPath(path, paint);
-    canvas.drawCircle(
-      Offset(size.width * 0.88, size.height * 0.08),
-      size.height * 0.7,
-      Paint()..color = Colors.white.withValues(alpha: 0.05),
-    );
+  State<_ListeningWaves> createState() => _ListeningWavesState();
+}
+
+class _ListeningWavesState extends State<_ListeningWaves>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 7),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncAnimation();
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  void didUpdateWidget(covariant _ListeningWaves oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active != widget.active) _syncAnimation();
+  }
+
+  void _syncAnimation() {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (widget.active && !reduceMotion) {
+      _controller.repeat();
+    } else if (_controller.value != 0) {
+      _controller.animateBack(
+        0,
+        duration: const Duration(milliseconds: 720),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: CustomPaint(
+      painter: _WavePainter(animation: _controller, active: widget.active),
+      isComplex: true,
+      willChange: widget.active,
+    ),
+  );
+}
+
+class _WavePainter extends CustomPainter {
+  _WavePainter({required this.animation, required this.active})
+    : super(repaint: animation);
+
+  final Animation<double> animation;
+  final bool active;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final phase = animation.value * math.pi * 2;
+    _drawWave(
+      canvas,
+      size,
+      baseline: 0.62,
+      amplitude: active ? 0.075 : 0.045,
+      frequency: 1.18,
+      phase: phase,
+      color: Colors.white.withValues(alpha: 0.08),
+    );
+    _drawWave(
+      canvas,
+      size,
+      baseline: 0.73,
+      amplitude: active ? 0.105 : 0.06,
+      frequency: 1.55,
+      phase: -phase * 0.76 + 1.2,
+      color: Colors.white.withValues(alpha: 0.14),
+    );
+
+    final pulse = active ? (math.sin(phase) + 1) / 2 : 0.2;
+    canvas.drawCircle(
+      Offset(size.width * 0.88, size.height * 0.08),
+      size.height * (0.62 + pulse * 0.08),
+      Paint()..color = Colors.white.withValues(alpha: 0.035 + pulse * 0.025),
+    );
+  }
+
+  void _drawWave(
+    Canvas canvas,
+    Size size, {
+    required double baseline,
+    required double amplitude,
+    required double frequency,
+    required double phase,
+    required Color color,
+  }) {
+    final path = Path();
+    const segments = 72;
+    for (var index = 0; index <= segments; index++) {
+      final fraction = index / segments;
+      final x = size.width * fraction;
+      final y =
+          size.height *
+          (baseline +
+              math.sin(fraction * math.pi * 2 * frequency + phase) * amplitude);
+      if (index == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _WavePainter oldDelegate) =>
+      oldDelegate.active != active || oldDelegate.animation != animation;
 }

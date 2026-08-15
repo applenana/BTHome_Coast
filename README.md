@@ -12,6 +12,9 @@
 - 搜索设备，并按全部、警报和加密广播筛选
 - 展示并一键复制原始十六进制 Service Data
 - 自适应手机单栏和 Windows 列表/详情双栏布局
+- 扫描时的多层海浪动画、平滑状态过渡与数值动效
+- 扫描时自动播放极低音量的原创海浪环境声，可随时静音
+- Android 自适应/单色图标和 Windows 多尺寸应用图标
 
 ## 加密广播
 
@@ -35,13 +38,18 @@ flutter build apk --debug
 flutter build windows --debug
 ```
 
+海浪环境声只会在扫描期间播放，默认音量为 5.5%；点击扫描按钮旁的音量图标可立即静音或恢复。
+
 Android 12 及更高版本首次扫描会请求“附近设备”权限；Android 11 及以下版本使用定位权限完成 BLE 扫描。应用声明 `neverForLocation`，不会请求或读取位置信息。
 
 ## 目录
 
 - `lib/bthome/`：不依赖平台的 BTHome v2 数据模型和解析器
+- `lib/audio/`：跨平台海浪环境声状态与播放控制
 - `lib/scanner/`：BLE 平台适配与扫描状态管理
 - `lib/ui/`：蓝白海岸主题和自适应界面
+- `assets/`：原创图标母版、应用内图标和无缝环境声
+- `tool/generate_assets.py`：重新生成平台图标与原创海浪声的资产脚本
 - `test/`：协议、控制器和界面测试
 
-协议实现依据 [BTHome v2 Format](https://bthome.io/format/)。BLE 扫描使用 MIT 许可的 [`bluetooth_low_energy`](https://pub.dev/packages/bluetooth_low_energy)。
+协议实现依据 [BTHome v2 Format](https://bthome.io/format/)。BLE 扫描使用 MIT 许可的 [`bluetooth_low_energy`](https://pub.dev/packages/bluetooth_low_energy)，环境声播放使用 MIT 许可的 [`audioplayers`](https://pub.dev/packages/audioplayers)。

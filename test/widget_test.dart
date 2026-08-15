@@ -12,7 +12,10 @@ void main() {
 
     final source = FakeBleDiscoverySource();
     final controller = ScannerController(source: source);
-    await tester.pumpWidget(BthomeDebuggerApp(controller: controller));
+    final ambientAudio = FakeAmbientAudioController();
+    await tester.pumpWidget(
+      BthomeDebuggerApp(controller: controller, ambientAudio: ambientAudio),
+    );
 
     expect(find.text('BTHome Coast'), findsOneWidget);
     expect(find.text('准备发现 BTHome 设备'), findsOneWidget);
@@ -21,7 +24,14 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 20));
     expect(source.started, isTrue);
+    expect(ambientAudio.scanning, isTrue);
+    expect(ambientAudio.isPlaying, isTrue);
     expect(find.text('正在聆听附近广播'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('ambient-audio-button')));
+    await tester.pump();
+    expect(ambientAudio.enabled, isFalse);
+    expect(ambientAudio.isPlaying, isFalse);
 
     source.emit(
       name: 'CH572 Alarm',
@@ -33,5 +43,26 @@ void main() {
     expect(find.text('高温警报'), findsOneWidget);
     expect(find.text('高温'), findsOneWidget);
     expect(find.textContaining('25.00', findRichText: true), findsOneWidget);
+  });
+
+  testWidgets('fits animated controls on a compact Android viewport', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final controller = ScannerController(source: FakeBleDiscoverySource());
+    await tester.pumpWidget(
+      BthomeDebuggerApp(
+        controller: controller,
+        ambientAudio: FakeAmbientAudioController(),
+      ),
+    );
+    await tester.tap(find.byKey(const Key('scan-button')));
+    await tester.pump(const Duration(milliseconds: 800));
+
+    expect(find.text('正在聆听附近广播'), findsOneWidget);
+    expect(find.byKey(const Key('ambient-audio-button')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

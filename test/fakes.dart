@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:bthome_debugger/audio/ambient_audio_controller.dart';
 import 'package:bthome_debugger/scanner/ble_discovery_source.dart';
 
 class FakeBleDiscoverySource implements BleDiscoverySource {
@@ -68,5 +69,34 @@ class FakeBleDiscoverySource implements BleDiscoverySource {
     disposed = true;
     await _statuses.close();
     await _discoveries.close();
+  }
+}
+
+class FakeAmbientAudioController extends AmbientAudioController {
+  bool _enabled = true;
+  bool scanning = false;
+  int scanningUpdates = 0;
+
+  @override
+  bool get enabled => _enabled;
+
+  @override
+  String? get error => null;
+
+  @override
+  bool get isPlaying => _enabled && scanning;
+
+  @override
+  Future<void> setScanning(bool value) async {
+    if (scanning == value) return;
+    scanning = value;
+    scanningUpdates++;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> toggleEnabled() async {
+    _enabled = !_enabled;
+    notifyListeners();
   }
 }
